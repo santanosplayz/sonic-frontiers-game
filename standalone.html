@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sonic Frontiers 3D Game - Standalone</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        #canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 18px;
+            z-index: 100;
+            pointer-events: auto;
+        }
+
+        .hud-item {
+            margin: 10px 0;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 15px;
+            border-radius: 5px;
+            border-left: 3px solid #00d4ff;
+        }
+
+        .level-select {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 200;
+            pointer-events: auto;
+            max-height: 80vh;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #00d4ff;
+        }
+
+        .level-btn {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+            display: block;
+            width: 100%;
+        }
+
+        .level-btn:hover {
+            background: #0052a3;
+            transform: scale(1.05);
+        }
+
+        .level-btn.active {
+            background: #00d4ff;
+            color: #000;
+            font-weight: bold;
+        }
+
+        .controls-info {
+            position: absolute;
+            top: 20px;
+            left: 250px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 3px solid #00d4ff;
+            font-size: 14px;
+            z-index: 100;
+            pointer-events: auto;
+            max-width: 300px;
+        }
+
+        .controls-info h4 {
+            margin-bottom: 10px;
+            color: #00d4ff;
+        }
+
+        .controls-info p {
+            margin: 5px 0;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .loading-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #1a1a1a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            flex-direction: column;
+        }
+
+        .loading-screen h2 {
+            margin-bottom: 20px;
+            color: #00d4ff;
+            font-size: 32px;
+        }
+
+        .spinner {
+            border: 4px solid #333;
+            border-top: 4px solid #00d4ff;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .status-text {
+            margin-top: 20px;
+            color: #00d4ff;
+            font-size: 16px;
+        }
+
+        #stats {
+            position: absolute;
+            top: 200px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 3px solid #ff6600;
+            font-size: 12px;
+            z-index: 100;
+            pointer-events: auto;
+            font-family: monospace;
+            color: #ff6600;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="canvas"></canvas>
+        <div id="ui">
+            <div class="hud">
+                <div class="hud-item">🎮 Level: <span id="currentLevel">1</span>/10</div>
+                <div class="hud-item">💰 Rings: <span id="ringCount">0</span></div>
+                <div class="hud-item">❤️ Health: <span id="playerHealth">100</span>%</div>
+                <div class="hud-item">⚡ Speed: <span id="playerSpeed">0</span></div>
+            </div>
+
+            <div class="controls-info">
+                <h4>🎮 Controls</h4>
+                <p>Arrow Keys/WASD - Move</p>
+                <p>SPACE - Jump</p>
+                <p>SHIFT - Dash</p>
+                <p>Mouse - Look Around</p>
+                <p>ESC - Unlock Mouse</p>
+            </div>
+
+            <div id="stats">
+                <div>FPS: <span id="fps">60</span></div>
+                <div>Objects: <span id="objects">0</span></div>
+                <div>Draw Calls: <span id="drawCalls">0</span></div>
+            </div>
+
+            <div class="level-select" id="levelSelect"></div>
+        </div>
+        <div class="loading-screen" id="loadingScreen">
+            <h2>🎮 Sonic Frontiers</h2>
+            <div class="spinner"></div>
+            <div class="status-text" id="loadingText">Loading Game...</div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // ========================================
+        // SONIC FRONTIERS 3D GAME ENGINE
+        // STANDALONE VERSION - ALL IN ONE FILE
+        // ========================================
+
+        let scene, camera, renderer, world, player, levels = [], currentLevelIndex = 0;
+        const keys = {};
+        let mouseDown = false, mouseX = 0, mouseY = 0;
+        let frameCount = 0, lastTime = Date.now(), fps = 60;
+
+        const levelConfigs = [
+            { name: 'Green Valley', color: 0x2ecc71 },
+            { name: 'Blue Ocean', color: 0x3498db },
+            { name: 'Red Desert', color: 0xe74c3c },
+            { name: 'Purple Mountains', color: 0x9b59b6 },
+            { name: 'Orange Caverns', color: 0xe67e22 },
+            { name: 'Cyan Crystals', color: 0x1abc9c },
+            { name: 'Dark Abyss', color: 0x34495e },
+            { name: 'Golden Temple', color: 0xf39c12 },
+            { name: 'Silver Peak', color: 0xbdc3c7 },
+            { name: 'Rainbow Paradise', color: 0xff69b4 }
+        ];
+
+        // ========================================
+        // INITIALIZATION
+        // ========================================
+
+        function init() {
+            updateLoadingStatus('Initializing Scene...');
+
+            // Scene setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87ceeb);
+            scene.fog = new THREE.Fog(0x87ceeb, 0, 500);
+
+            // Camera setup
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
+            camera.position.set(0, 20, 50);
+            camera.lookAt(0, 0, 0);
+
+            // Renderer setup
+            const canvas = document.getElementById('canvas');
+            renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFShadowShadowMap;
+
+            // Lighting
+            setupLighting();
+
+            // Simple physics without external library
+            setupSimplePhysics();
+
+            updateLoadingStatus('Creating Player...');
+            player = createPlayer();
+            scene.add(player.mesh);
+
+            updateLoadingStatus('Generating Levels...');
+            createLevels();
+            loadLevel(0);
+
+            updateLoadingStatus('Setting Up UI...');
+            setupUI();
+            setupEventListeners();
+
+            updateLoadingStatus('Ready to Play!');
+            setTimeout(() => {
+                document.getElementById('loadingScreen').style.display = 'none';
+                animate();
+            }, 800);
+        }
+
+        function updateLoadingStatus(text) {
+            document.getElementById('loadingText').textContent = text;
+        }
+
+        // ========================================
+        // LIGHTING
+        // ========================================
+
+        function setupLighting() {
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(50, 100, 50);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            scene.add(dirLight);
+
+            const hemiLight = new THREE.HemisphereLight(0x87ceeb, 0xffffff, 0.4);
+            scene.add(hemiLight);
+        }
+
+        // ========================================
+        // SIMPLE PHYSICS
+        // ========================================
+
+        let gravity = -9.82;
+        let platforms = [];
+        let obstacles = [];
+
+        function setupSimplePhysics() {
+            // Just gravity and collision detection
+        }
+
+        function checkCollision(pos1, pos2, distance) {
+            return pos1.distanceTo(pos2) < distance;
+        }
+
+        // ========================================
+        // PLAYER
+        // ========================================
+
+        function createPlayer() {
+            const group = new THREE.Group();
+
+            const geometry = new THREE.CapsuleGeometry(1, 2, 4, 8);
+            const material = new THREE.MeshStandardMaterial({ color: 0x0099ff });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            group.add(mesh);
+
+            // Eyes
+            const eyeGeometry = new THREE.SphereGeometry(0.3, 8, 8);
+            const eyeMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
+            const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+            leftEye.position.set(-0.4, 0.5, 1);
+            const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+            rightEye.position.set(0.4, 0.5, 1);
+            group.add(leftEye);
+            group.add(rightEye);
+
+            group.position.set(0, 10, 0);
+
+            return {
+                mesh: group,
+                velocity: { x: 0, y: 0, z: 0 },
+                isJumping: false,
+                health: 100,
+                rings: 0,
+                speed: 0
+            };
+        }
+
+        // ========================================
+        // LEVELS
+        // ========================================
+
+        function createLevels() {
+            levelConfigs.forEach((config, index) => {
+                levels.push({
+                    index,
+                    name: config.name,
+                    color: config.color,
+                    mesh: null,
+                    platforms: [],
+                    enemies: [],
+                    rings: [],
+                    checkpoint: null
+                });
+            });
+        }
+
+        function loadLevel(levelIndex) {
+            if (levels[currentLevelIndex].mesh) {
+                scene.remove(levels[currentLevelIndex].mesh);
+            }
+
+            currentLevelIndex = levelIndex;
+            const level = levels[levelIndex];
+
+            generateLevelTerrain(level);
+            scene.add(level.mesh);
+
+            player.mesh.position.set(0, 10, 0);
+            player.velocity = { x: 0, y: 0, z: 0 };
+            player.health = 100;
+            player.rings = 0;
+            player.isJumping = false;
+
+            document.getElementById('currentLevel').textContent = levelIndex + 1;
+            updateLevelButtonStates();
+            camera.position.set(0, 20, 50);
+        }
+
+        function generateLevelTerrain(level) {
+            const levelGroup = new THREE.Group();
+
+            // Main platform
+            const platformGeometry = new THREE.BoxGeometry(100, 2, 100);
+            const platformMaterial = new THREE.MeshStandardMaterial({ color: level.color });
+            const mainPlatform = new THREE.Mesh(platformGeometry, platformMaterial);
+            mainPlatform.position.y = -2;
+            mainPlatform.castShadow = true;
+            mainPlatform.receiveShadow = true;
+            levelGroup.add(mainPlatform);
+
+            platforms.push({
+                mesh: mainPlatform,
+                x: 0, y: -2, z: 0,
+                width: 100, height: 2, depth: 100
+            });
+
+            // Floating platforms
+            const platformCount = 8 + level.index * 2;
+            for (let i = 0; i < platformCount; i++) {
+                const x = (Math.random() - 0.5) * 150;
+                const y = 5 + Math.random() * 30;
+                const z = (Math.random() - 0.5) * 150;
+                const size = 5 + Math.random() * 5;
+
+                const floatPlatform = new THREE.Mesh(
+                    new THREE.BoxGeometry(size, 1, size),
+                    new THREE.MeshStandardMaterial({ color: 0xffffff })
+                );
+                floatPlatform.position.set(x, y, z);
+                floatPlatform.castShadow = true;
+                floatPlatform.receiveShadow = true;
+                levelGroup.add(floatPlatform);
+
+                platforms.push({
+                    mesh: floatPlatform,
+                    x, y, z,
+                    width: size, height: 1, depth: size
+                });
+
+                level.platforms.push(floatPlatform);
+            }
+
+            // Rings
+            const ringCount = 50 + level.index * 10;
+            for (let i = 0; i < ringCount; i++) {
+                const ring = createRing();
+                ring.position.set(
+                    (Math.random() - 0.5) * 200,
+                    5 + Math.random() * 40,
+                    (Math.random() - 0.5) * 200
+                );
+                levelGroup.add(ring);
+                level.rings.push(ring);
+            }
+
+            // Enemies
+            const enemyCount = 3 + Math.floor(level.index / 2);
+            for (let i = 0; i < enemyCount; i++) {
+                const enemy = createEnemy();
+                enemy.position.set(
+                    (Math.random() - 0.5) * 150,
+                    20 + Math.random() * 20,
+                    (Math.random() - 0.5) * 150
+                );
+                levelGroup.add(enemy);
+                level.enemies.push(enemy);
+            }
+
+            // Checkpoint
+            const checkpoint = createCheckpoint();
+            checkpoint.position.set(0, 10, -80);
+            levelGroup.add(checkpoint);
+            level.checkpoint = checkpoint;
+
+            level.mesh = levelGroup;
+        }
+
+        function createRing() {
+            const geometry = new THREE.TorusGeometry(0.5, 0.1, 8, 16);
+            const material = new THREE.MeshStandardMaterial({ color: 0xffd700 });
+            const ring = new THREE.Mesh(geometry, material);
+            ring.castShadow = true;
+            ring.receiveShadow = true;
+            ring.collected = false;
+            return ring;
+        }
+
+        function createEnemy() {
+            const geometry = new THREE.OctahedronGeometry(1);
+            const material = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+            const enemy = new THREE.Mesh(geometry, material);
+            enemy.castShadow = true;
+            enemy.receiveShadow = true;
+            enemy.vx = (Math.random() - 0.5) * 0.1;
+            enemy.vz = (Math.random() - 0.5) * 0.1;
+            return enemy;
+        }
+
+        function createCheckpoint() {
+            const geometry = new THREE.CylinderGeometry(3, 3, 2, 32);
+            const material = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x00aa00 });
+            const checkpoint = new THREE.Mesh(geometry, material);
+            checkpoint.castShadow = true;
+            checkpoint.receiveShadow = true;
+            checkpoint.reached = false;
+            return checkpoint;
+        }
+
+        // ========================================
+        // GAME LOGIC
+        // ========================================
+
+        function updatePlayer() {
+            const direction = { x: 0, z: 0 };
+            const moveSpeed = 0.5;
+
+            if (keys['ArrowUp'] || keys['w'] || keys['W']) direction.z -= moveSpeed;
+            if (keys['ArrowDown'] || keys['s'] || keys['S']) direction.z += moveSpeed;
+            if (keys['ArrowLeft'] || keys['a'] || keys['A']) direction.x -= moveSpeed;
+            if (keys['ArrowRight'] || keys['d'] || keys['D']) direction.x += moveSpeed;
+
+            player.mesh.position.x += direction.x;
+            player.mesh.position.z += direction.z;
+
+            // Gravity
+            player.velocity.y += gravity * 0.016;
+            player.mesh.position.y += player.velocity.y * 0.016;
+
+            // Jump
+            if (keys[' '] && !player.isJumping) {
+                player.velocity.y = 15;
+                player.isJumping = true;
+            }
+
+            // Collision with platforms
+            let onPlatform = false;
+            for (let platform of platforms) {
+                if (checkPlatformCollision(player.mesh.position, platform)) {
+                    player.mesh.position.y = platform.y + platform.height / 2 + 1;
+                    player.velocity.y = 0;
+                    player.isJumping = false;
+                    onPlatform = true;
+                }
+            }
+
+            // Fall off world
+            if (player.mesh.position.y < -50) {
+                loadLevel(currentLevelIndex);
+            }
+
+            // Update HUD
+            player.speed = Math.sqrt(direction.x ** 2 + direction.z ** 2) * 100;
+            document.getElementById('playerSpeed').textContent = Math.floor(player.speed);
+            document.getElementById('playerHealth').textContent = player.health;
+            document.getElementById('ringCount').textContent = player.rings;
+        }
+
+        function checkPlatformCollision(playerPos, platform) {
+            const dx = Math.abs(playerPos.x - platform.x);
+            const dy = Math.abs(playerPos.y - (platform.y + platform.height / 2 + 1));
+            const dz = Math.abs(playerPos.z - platform.z);
+
+            return dx < platform.width / 2 && dy < 2 && dz < platform.depth / 2;
+        }
+
+        function updateCollisions() {
+            const level = levels[currentLevelIndex];
+
+            // Ring collection
+            level.rings.forEach(ring => {
+                if (!ring.collected && checkCollision(player.mesh.position, ring.position, 3)) {
+                    ring.collected = true;
+                    scene.remove(ring);
+                    player.rings += 10;
+                }
+            });
+
+            // Enemy collision
+            level.enemies.forEach(enemy => {
+                if (checkCollision(player.mesh.position, enemy.position, 4)) {
+                    player.health -= 10;
+                    player.mesh.position.y += 5;
+                    if (player.health <= 0) {
+                        loadLevel(currentLevelIndex);
+                    }
+                }
+            });
+
+            // Checkpoint
+            if (level.checkpoint && !level.checkpoint.reached) {
+                if (checkCollision(player.mesh.position, level.checkpoint.position, 5)) {
+                    level.checkpoint.reached = true;
+                    setTimeout(() => {
+                        const nextLevel = (currentLevelIndex + 1) % levels.length;
+                        loadLevel(nextLevel);
+                    }, 2000);
+                }
+            }
+        }
+
+        function updateEnemies() {
+            const level = levels[currentLevelIndex];
+            level.enemies.forEach(enemy => {
+                enemy.position.x += enemy.vx;
+                enemy.position.z += enemy.vz;
+                enemy.rotation.x += 0.01;
+                enemy.rotation.y += 0.02;
+
+                if (Math.abs(enemy.position.x) > 100) enemy.vx *= -1;
+                if (Math.abs(enemy.position.z) > 100) enemy.vz *= -1;
+            });
+        }
+
+        function updateRings() {
+            const level = levels[currentLevelIndex];
+            level.rings.forEach(ring => {
+                if (!ring.collected) {
+                    ring.rotation.x += 0.02;
+                    ring.rotation.y += 0.03;
+                    ring.position.y += Math.sin(Date.now() * 0.001 + ring.uuid) * 0.01;
+                }
+            });
+        }
+
+        function updateCamera() {
+            if (mouseDown) {
+                const sensitivity = 0.005;
+                const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+                euler.setFromQuaternion(camera.quaternion);
+                euler.rotateY(-mouseX * sensitivity);
+                euler.rotateX(-mouseY * sensitivity);
+                euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
+                camera.quaternion.setFromEuler(euler);
+            }
+
+            const targetPos = player.mesh.position.clone();
+            targetPos.y += 15;
+            const cameraDir = camera.position.clone().sub(targetPos).normalize();
+            const desiredPos = targetPos.clone().addScaledVector(cameraDir, 50);
+
+            camera.position.lerp(desiredPos, 0.1);
+            camera.lookAt(targetPos.x, targetPos.y - 5, targetPos.z);
+        }
+
+        // ========================================
+        // UI
+        // ========================================
+
+        function setupUI() {
+            const levelSelect = document.getElementById('levelSelect');
+            levels.forEach((level, index) => {
+                const btn = document.createElement('button');
+                btn.textContent = `L${index + 1}: ${level.name}`;
+                btn.className = 'level-btn';
+                if (index === 0) btn.classList.add('active');
+                btn.onclick = () => loadLevel(index);
+                levelSelect.appendChild(btn);
+            });
+        }
+
+        function updateLevelButtonStates() {
+            document.querySelectorAll('.level-btn').forEach((btn, index) => {
+                btn.classList.toggle('active', index === currentLevelIndex);
+            });
+        }
+
+        // ========================================
+        // EVENTS
+        // ========================================
+
+        function setupEventListeners() {
+            window.addEventListener('keydown', (e) => { keys[e.key] = true; });
+            window.addEventListener('keyup', (e) => { keys[e.key] = false; });
+
+            document.addEventListener('mousedown', (e) => {
+                if (e.button === 0) {
+                    mouseDown = true;
+                    document.body.style.cursor = 'none';
+                }
+            });
+
+            document.addEventListener('mouseup', (e) => {
+                if (e.button === 0) {
+                    mouseDown = false;
+                    document.body.style.cursor = 'auto';
+                }
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                mouseX = e.movementX;
+                mouseY = e.movementY;
+            });
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        // ========================================
+        // ANIMATION LOOP
+        // ========================================
+
+        function updateFPS() {
+            frameCount++;
+            const currentTime = Date.now();
+            if (currentTime >= lastTime + 1000) {
+                fps = frameCount;
+                frameCount = 0;
+                lastTime = currentTime;
+                document.getElementById('fps').textContent = fps;
+                document.getElementById('objects').textContent = scene.children.length;
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            updatePlayer();
+            updateCollisions();
+            updateEnemies();
+            updateRings();
+            updateCamera();
+            updateFPS();
+
+            renderer.render(scene, camera);
+        }
+
+        // ========================================
+        // START
+        // ========================================
+
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
