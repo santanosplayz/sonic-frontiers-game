@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sonic Frontiers - Pure Canvas</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Arial',sans-serif;background:#1a1a1a;color:#fff;overflow:hidden}#gameContainer{width:100vw;height:100vh;position:relative}#canvas{display:block;width:100%;height:100%;background:#87ceeb}.hud{position:absolute;top:20px;left:20px;font-size:16px;z-index:100;background:rgba(0,0,0,0.7);padding:10px 15px;border-radius:5px;border-left:3px solid #00d4ff}.hud-item{margin:8px 0;font-size:14px}.level-select{position:absolute;top:20px;right:20px;z-index:200;background:rgba(0,0,0,0.85);padding:12px;border-radius:8px;border:2px solid #00d4ff;max-height:75vh;overflow-y:auto;width:140px}.level-btn{background:#0066cc;color:#fff;border:none;padding:6px 8px;margin:3px 0;border-radius:4px;cursor:pointer;font-size:11px;width:100%;transition:all 0.2s}.level-btn:hover{background:#0052a3}.level-btn.active{background:#00d4ff;color:#000;font-weight:bold}#controls{position:absolute;bottom:20px;left:20px;background:rgba(0,0,0,0.7);padding:10px 15px;border-radius:5px;border-left:3px solid #00d4ff;font-size:12px;z-index:100}
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="canvas"></canvas>
+        <div class="hud">
+            <div class="hud-item">🎮 L: <span id="lv">1</span></div>
+            <div class="hud-item">💰 R: <span id="rc">0</span></div>
+            <div class="hud-item">❤️ H: <span id="hp">100</span>%</div>
+            <div class="hud-item">⚡ S: <span id="sp">0</span></div>
+        </div>
+        <div class="level-select" id="ls"></div>
+        <div id="controls">
+            <div>⬆️⬅️⬇️➡️ Move</div>
+            <div>SPACE Jump</div>
+        </div>
+    </div>
+
+    <script>
+        // ========================================
+        // SONIC FRONTIERS - PURE CANVAS 2D
+        // NO DEPENDENCIES - INSTANT LOAD
+        // ========================================
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const keys = {};
+        const levels = [
+            { name: 'Valley', color: '#2ecc71' },
+            { name: 'Ocean', color: '#3498db' },
+            { name: 'Desert', color: '#e74c3c' },
+            { name: 'Mountains', color: '#9b59b6' },
+            { name: 'Caverns', color: '#e67e22' },
+            { name: 'Crystals', color: '#1abc9c' },
+            { name: 'Abyss', color: '#34495e' },
+            { name: 'Temple', color: '#f39c12' },
+            { name: 'Peak', color: '#bdc3c7' },
+            { name: 'Paradise', color: '#ff69b4' }
+        ];
+
+        let currentLevel = 0;
+        let gameState = {
+            player: { x: 400, y: 300, vx: 0, vy: 0, jumping: false, health: 100, rings: 0 },
+            platforms: [],
+            enemies: [],
+            rings: [],
+            goal: null
+        };
+
+        const gravity = 0.3;
+        const moveSpeed = 5;
+        const jumpPower = 15;
+
+        // ========================================
+        // GAME INITIALIZATION
+        // ========================================
+
+        function init() {
+            setupUI();
+            loadLevel(0);
+            setupEventListeners();
+            gameLoop();
+        }
+
+        function setupUI() {
+            const ls = document.getElementById('ls');
+            levels.forEach((level, i) => {
+                const btn = document.createElement('button');
+                btn.textContent = `L${i + 1}`;
+                btn.className = 'level-btn';
+                if (i === 0) btn.classList.add('active');
+                btn.onclick = () => loadLevel(i);
+                ls.appendChild(btn);
+            });
+        }
+
+        function loadLevel(levelIndex) {
+            currentLevel = levelIndex;
+            const levelColor = levels[levelIndex].color;
+
+            gameState.player = { x: 400, y: 300, vx: 0, vy: 0, jumping: false, health: 100, rings: 0 };
+            gameState.platforms = [];
+            gameState.enemies = [];
+            gameState.rings = [];
+
+            // Generate platforms
+            gameState.platforms.push({ x: 0, y: canvas.height - 50, w: canvas.width, h: 50, color: levelColor });
+
+            for (let i = 0; i < 8 + levelIndex * 1; i++) {
+                gameState.platforms.push({
+                    x: Math.random() * (canvas.width - 80),
+                    y: 100 + Math.random() * (canvas.height - 200),
+                    w: 80,
+                    h: 20,
+                    color: '#fff'
+                });
+            }
+
+            // Generate rings
+            for (let i = 0; i < 20 + levelIndex * 5; i++) {
+                gameState.rings.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * (canvas.height - 100),
+                    collected: false
+                });
+            }
+
+            // Generate enemies
+            for (let i = 0; i < 1 + Math.floor(levelIndex / 3); i++) {
+                gameState.enemies.push({
+                    x: Math.random() * canvas.width,
+                    y: 200 + Math.random() * 200,
+                    vx: (Math.random() - 0.5) * 3,
+                    vy: 0,
+                    health: 30
+                });
+            }
+
+            // Goal
+            gameState.goal = { x: canvas.width - 100, y: 200, reached: false };
+
+            updateUI();
+        }
+
+        function updateUI() {
+            document.getElementById('lv').textContent = currentLevel + 1;
+            document.getElementById('rc').textContent = gameState.player.rings;
+            document.getElementById('hp').textContent = gameState.player.health;
+            document.getElementById('sp').textContent = Math.floor(Math.sqrt(gameState.player.vx ** 2 + gameState.player.vy ** 2));
+
+            document.querySelectorAll('.level-btn').forEach((btn, i) => {
+                btn.classList.toggle('active', i === currentLevel);
+            });
+        }
+
+        // ========================================
+        // GAME LOGIC
+        // ========================================
+
+        function updatePlayer() {
+            // Movement
+            gameState.player.vx = 0;
+            if (keys['ArrowLeft'] || keys['a'] || keys['A']) gameState.player.vx = -moveSpeed;
+            if (keys['ArrowRight'] || keys['d'] || keys['D']) gameState.player.vx = moveSpeed;
+
+            // Apply gravity
+            gameState.player.vy += gravity;
+            gameState.player.x += gameState.player.vx;
+            gameState.player.y += gameState.player.vy;
+
+            // Platform collision
+            let onPlatform = false;
+            gameState.platforms.forEach(platform => {
+                if (
+                    gameState.player.x + 15 > platform.x &&
+                    gameState.player.x - 15 < platform.x + platform.w &&
+                    gameState.player.y + 15 > platform.y &&
+                    gameState.player.y + 15 < platform.y + platform.h &&
+                    gameState.player.vy >= 0
+                ) {
+                    gameState.player.y = platform.y - 15;
+                    gameState.player.vy = 0;
+                    gameState.player.jumping = false;
+                    onPlatform = true;
+                }
+            });
+
+            // Jump
+            if ((keys[' '] || keys['ArrowUp'] || keys['w'] || keys['W']) && !gameState.player.jumping) {
+                gameState.player.vy = -jumpPower;
+                gameState.player.jumping = true;
+            }
+
+            // Boundary check
+            if (gameState.player.x < 0) gameState.player.x = 0;
+            if (gameState.player.x > canvas.width) gameState.player.x = canvas.width;
+
+            // Fall off world
+            if (gameState.player.y > canvas.height) {
+                loadLevel(currentLevel);
+            }
+        }
+
+        function updateEnemies() {
+            gameState.enemies.forEach(enemy => {
+                enemy.x += enemy.vx;
+                enemy.y += enemy.vy;
+
+                // Bounce
+                if (enemy.x < 0 || enemy.x > canvas.width) enemy.vx *= -1;
+
+                // Check collision with player
+                const dx = gameState.player.x - enemy.x;
+                const dy = gameState.player.y - enemy.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < 30) {
+                    gameState.player.health -= 10;
+                    gameState.player.y -= 50;
+                    if (gameState.player.health <= 0) {
+                        loadLevel(currentLevel);
+                    }
+                }
+            });
+        }
+
+        function updateRings() {
+            gameState.rings.forEach(ring => {
+                if (!ring.collected) {
+                    const dx = gameState.player.x - ring.x;
+                    const dy = gameState.player.y - ring.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < 25) {
+                        ring.collected = true;
+                        gameState.player.rings += 10;
+                    }
+                }
+            });
+        }
+
+        function checkGoal() {
+            if (!gameState.goal.reached) {
+                const dx = gameState.player.x - gameState.goal.x;
+                const dy = gameState.player.y - gameState.goal.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < 40) {
+                    gameState.goal.reached = true;
+                    setTimeout(() => {
+                        loadLevel((currentLevel + 1) % levels.length);
+                    }, 1000);
+                }
+            }
+        }
+
+        // ========================================
+        // RENDERING
+        // ========================================
+
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = '#87ceeb';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw platforms
+            gameState.platforms.forEach(platform => {
+                ctx.fillStyle = platform.color;
+                ctx.fillRect(platform.x, platform.y, platform.w, platform.h);
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(platform.x, platform.y, platform.w, platform.h);
+            });
+
+            // Draw rings
+            gameState.rings.forEach(ring => {
+                if (!ring.collected) {
+                    ctx.fillStyle = '#ffd700';
+                    ctx.beginPath();
+                    ctx.arc(ring.x, ring.y, 8, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+            });
+
+            // Draw enemies
+            ctx.fillStyle = '#ff0000';
+            gameState.enemies.forEach(enemy => {
+                ctx.fillRect(enemy.x - 15, enemy.y - 15, 30, 30);
+            });
+
+            // Draw goal
+            if (!gameState.goal.reached) {
+                ctx.fillStyle = '#00ff00';
+                ctx.beginPath();
+                ctx.arc(gameState.goal.x, gameState.goal.y, 25, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                ctx.fillStyle = '#000';
+                ctx.font = 'bold 20px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('🚩', gameState.goal.x, gameState.goal.y);
+            }
+
+            // Draw player
+            ctx.fillStyle = '#0099ff';
+            ctx.fillRect(gameState.player.x - 15, gameState.player.y - 15, 30, 30);
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(gameState.player.x - 15, gameState.player.y - 15, 30, 30);
+
+            // Draw eyes
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(gameState.player.x - 8, gameState.player.y - 8, 6, 6);
+            ctx.fillRect(gameState.player.x + 2, gameState.player.y - 8, 6, 6);
+        }
+
+        // ========================================
+        // GAME LOOP
+        // ========================================
+
+        function gameLoop() {
+            updatePlayer();
+            updateEnemies();
+            updateRings();
+            checkGoal();
+            updateUI();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // ========================================
+        // EVENT LISTENERS
+        // ========================================
+
+        function setupEventListeners() {
+            window.addEventListener('keydown', (e) => {
+                keys[e.key] = true;
+            });
+
+            window.addEventListener('keyup', (e) => {
+                keys[e.key] = false;
+            });
+
+            window.addEventListener('resize', () => {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+            });
+        }
+
+        // Start game
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
