@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sonic Frontiers - Ultra Optimized</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Arial',sans-serif;background:#1a1a1a;color:#fff;overflow:hidden}#gameContainer{width:100vw;height:100vh;position:relative}#canvas{display:block;width:100%;height:100%}.hud{position:absolute;top:20px;left:20px;font-size:16px;z-index:100;background:rgba(0,0,0,0.7);padding:10px 15px;border-radius:5px;border-left:3px solid #00d4ff}.hud-item{margin:8px 0;font-size:14px}.level-select{position:absolute;top:20px;right:20px;z-index:200;background:rgba(0,0,0,0.85);padding:12px;border-radius:8px;border:2px solid #00d4ff;max-height:75vh;overflow-y:auto;width:220px}.level-btn{background:#0066cc;color:#fff;border:none;padding:8px 10px;margin:4px 0;border-radius:4px;cursor:pointer;font-size:12px;width:100%;transition:all 0.2s}.level-btn:hover{background:#0052a3}.level-btn.active{background:#00d4ff;color:#000;font-weight:bold}.controls{position:absolute;top:20px;left:250px;background:rgba(0,0,0,0.7);padding:12px;border-radius:5px;border-left:3px solid #00d4ff;font-size:12px;z-index:100}.controls h4{margin-bottom:8px;color:#00d4ff;font-size:13px}.controls p{margin:4px 0;font-family:monospace;font-size:11px}#stats{position:absolute;top:220px;right:20px;background:rgba(0,0,0,0.8);padding:12px;border-radius:5px;border-left:3px solid #ff6600;font-size:11px;z-index:100;font-family:monospace;color:#ff6600}#loading{position:absolute;top:0;left:0;width:100%;height:100%;background:#1a1a1a;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1000}#loading h2{color:#00d4ff;margin-bottom:15px;font-size:28px}#spinner{border:3px solid #333;border-top:3px solid #00d4ff;border-radius:50%;width:40px;height:40px;animation:spin 0.8s linear infinite}@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="canvas"></canvas>
+        <div class="hud">
+            <div class="hud-item">🎮 L: <span id="lv">1</span></div>
+            <div class="hud-item">💰 R: <span id="rc">0</span></div>
+            <div class="hud-item">❤️ H: <span id="hp">100</span>%</div>
+            <div class="hud-item">⚡ S: <span id="sp">0</span></div>
+        </div>
+        <div class="controls">
+            <h4>🎮 Controls</h4>
+            <p>↑↓←→/WASD</p>
+            <p>SPACE Jump</p>
+            <p>Mouse Look</p>
+        </div>
+        <div id="stats">
+            <div>FPS: <span id="fps">60</span></div>
+            <div>Objects: <span id="obj">0</span></div>
+        </div>
+        <div class="level-select" id="ls"></div>
+        <div id="loading">
+            <h2>🎮 Sonic</h2>
+            <div id="spinner"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@r128/build/three.min.js"></script>
+    <script>
+        // ========================================
+        // ULTRA-OPTIMIZED SONIC GAME
+        // ========================================
+
+        let sc,ca,re,pl,lv=[],cli=0;
+        const ky={};
+        let md=0,mx=0,my=0;
+        let fc=0,lt=Date.now(),fps=60;
+        const lvC=[
+            {n:'Valley',c:0x2ecc71},{n:'Ocean',c:0x3498db},{n:'Desert',c:0xe74c3c},
+            {n:'Mountains',c:0x9b59b6},{n:'Caverns',c:0xe67e22},{n:'Crystals',c:0x1abc9c},
+            {n:'Abyss',c:0x34495e},{n:'Temple',c:0xf39c12},{n:'Peak',c:0xbdc3c7},
+            {n:'Paradise',c:0xff69b4}
+        ];
+        const g=9.82;
+        let plf=[],obst=[];
+
+        function i(){
+            sc=new THREE.Scene();
+            sc.background=new THREE.Color(0x87ceeb);
+            sc.fog=new THREE.Fog(0x87ceeb,0,400);
+
+            ca=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
+            ca.position.set(0,20,50);
+
+            const cv=document.getElementById('canvas');
+            re=new THREE.WebGLRenderer({canvas:cv,antialias:!0});
+            re.setSize(innerWidth,innerHeight);
+            re.shadowMap.enabled=!0;
+
+            // Lighting
+            const al=new THREE.AmbientLight(0xffffff,0.6);
+            sc.add(al);
+            const dl=new THREE.DirectionalLight(0xffffff,0.7);
+            dl.position.set(50,80,50);
+            dl.castShadow=!0;
+            dl.shadow.mapSize.width=1024;
+            dl.shadow.mapSize.height=1024;
+            sc.add(dl);
+
+            pl=cP();
+            sc.add(pl.m);
+
+            cL();
+            lL(0);
+
+            sUI();
+            sEL();
+
+            setTimeout(()=>{
+                document.getElementById('loading').style.display='none';
+                a();
+            },600);
+        }
+
+        function cP(){
+            const g=new THREE.Group();
+            const gm=new THREE.CapsuleGeometry(1,2,4,8);
+            const mt=new THREE.MeshStandardMaterial({color:0x0099ff});
+            const m=new THREE.Mesh(gm,mt);
+            m.castShadow=!0;
+            g.add(m);
+            g.position.set(0,10,0);
+            return {m:g,v:{x:0,y:0,z:0},j:!1,h:100,r:0,s:0};
+        }
+
+        function cL(){
+            lvC.forEach((c,i)=>{
+                lv.push({
+                    i,nm:c.n,col:c.c,m:null,p:[],e:[],r:[],cp:null
+                });
+            });
+        }
+
+        function lL(i){
+            if(lv[cli].m)sc.remove(lv[cli].m);
+            cli=i;
+            const l=lv[i];
+
+            const lg=new THREE.Group();
+
+            // Main platform
+            const pm=new THREE.Mesh(
+                new THREE.BoxGeometry(100,2,100),
+                new THREE.MeshStandardMaterial({color:l.col})
+            );
+            pm.position.y=-2;
+            pm.castShadow=!0;
+            pm.receiveShadow=!0;
+            lg.add(pm);
+
+            plf=[{m:pm,x:0,y:-2,z:0,w:100,h:2,d:100}];
+
+            // Floating platforms
+            const pct=8+i*2;
+            for(let j=0;j<pct;j++){
+                const x=(Math.random()-0.5)*150;
+                const y=5+Math.random()*30;
+                const z=(Math.random()-0.5)*150;
+                const s=5+Math.random()*4;
+
+                const fp=new THREE.Mesh(
+                    new THREE.BoxGeometry(s,1,s),
+                    new THREE.MeshStandardMaterial({color:0xffffff})
+                );
+                fp.position.set(x,y,z);
+                fp.castShadow=!0;
+                fp.receiveShadow=!0;
+                lg.add(fp);
+
+                plf.push({m:fp,x,y,z,w:s,h:1,d:s});
+                l.p.push(fp);
+            }
+
+            // Rings
+            const rct=40+i*8;
+            for(let j=0;j<rct;j++){
+                const r=new THREE.Mesh(
+                    new THREE.TorusGeometry(0.5,0.1,8,16),
+                    new THREE.MeshStandardMaterial({color:0xffd700})
+                );
+                r.position.set((Math.random()-0.5)*200,5+Math.random()*40,(Math.random()-0.5)*200);
+                r.castShadow=!0;
+                r.col=!1;
+                lg.add(r);
+                l.r.push(r);
+            }
+
+            // Enemies
+            const ect=2+Math.floor(i/2);
+            for(let j=0;j<ect;j++){
+                const e=new THREE.Mesh(
+                    new THREE.OctahedronGeometry(1),
+                    new THREE.MeshStandardMaterial({color:0xff0000})
+                );
+                e.position.set((Math.random()-0.5)*150,20+Math.random()*20,(Math.random()-0.5)*150);
+                e.castShadow=!0;
+                e.vx=(Math.random()-0.5)*0.1;
+                e.vz=(Math.random()-0.5)*0.1;
+                lg.add(e);
+                l.e.push(e);
+            }
+
+            // Checkpoint
+            const cp=new THREE.Mesh(
+                new THREE.CylinderGeometry(3,3,2,24),
+                new THREE.MeshStandardMaterial({color:0x00ff00,emissive:0x00aa00})
+            );
+            cp.position.set(0,10,-80);
+            cp.castShadow=!0;
+            cp.rch=!1;
+            lg.add(cp);
+            l.cp=cp;
+
+            l.m=lg;
+            sc.add(lg);
+
+            pl.m.position.set(0,10,0);
+            pl.v={x:0,y:0,z:0};
+            pl.h=100;
+            pl.r=0;
+            pl.j=!1;
+            ca.position.set(0,20,50);
+
+            document.getElementById('lv').textContent=i+1;
+            uLB();
+        }
+
+        function uP(){
+            let d={x:0,z:0};
+            const ms=0.5;
+
+            if(ky['ArrowUp']||ky['w']||ky['W'])d.z-=ms;
+            if(ky['ArrowDown']||ky['s']||ky['S'])d.z+=ms;
+            if(ky['ArrowLeft']||ky['a']||ky['A'])d.x-=ms;
+            if(ky['ArrowRight']||ky['d']||ky['D'])d.x+=ms;
+
+            pl.m.position.x+=d.x;
+            pl.m.position.z+=d.z;
+
+            pl.v.y-=g*0.016;
+            pl.m.position.y+=pl.v.y*0.016;
+
+            if(ky[' ']&&!pl.j){
+                pl.v.y=15;
+                pl.j=!0;
+            }
+
+            for(let pf of plf){
+                const dx=Math.abs(pl.m.position.x-pf.x);
+                const dy=Math.abs(pl.m.position.y-(pf.y+pf.h/2+1));
+                const dz=Math.abs(pl.m.position.z-pf.z);
+                if(dx<pf.w/2&&dy<2&&dz<pf.d/2){
+                    pl.m.position.y=pf.y+pf.h/2+1;
+                    pl.v.y=0;
+                    pl.j=!1;
+                }
+            }
+
+            if(pl.m.position.y<-50)lL(cli);
+
+            pl.s=Math.sqrt(d.x*d.x+d.z*d.z)*100;
+            document.getElementById('sp').textContent=Math.floor(pl.s);
+            document.getElementById('hp').textContent=pl.h;
+            document.getElementById('rc').textContent=pl.r;
+        }
+
+        function uC(){
+            const l=lv[cli];
+
+            l.r.forEach(r=>{
+                if(!r.col){
+                    const d=pl.m.position.distanceTo(r.position);
+                    if(d<3){
+                        r.col=!0;
+                        sc.remove(r);
+                        pl.r+=10;
+                    }
+                }
+            });
+
+            l.e.forEach(e=>{
+                const d=pl.m.position.distanceTo(e.position);
+                if(d<4){
+                    pl.h-=10;
+                    pl.m.position.y+=5;
+                    if(pl.h<=0)lL(cli);
+                }
+            });
+
+            if(l.cp&&!l.cp.rch){
+                const d=pl.m.position.distanceTo(l.cp.position);
+                if(d<5){
+                    l.cp.rch=!0;
+                    setTimeout(()=>{
+                        lL((cli+1)%lv.length);
+                    },1500);
+                }
+            }
+        }
+
+        function uE(){
+            const l=lv[cli];
+            l.e.forEach(e=>{
+                e.position.x+=e.vx;
+                e.position.z+=e.vz;
+                e.rotation.y+=0.02;
+                if(Math.abs(e.position.x)>100)e.vx*=-1;
+                if(Math.abs(e.position.z)>100)e.vz*=-1;
+            });
+        }
+
+        function uR(){
+            const l=lv[cli];
+            const t=Date.now()*0.001;
+            l.r.forEach((r,i)=>{
+                if(!r.col){
+                    r.rotation.y+=0.03;
+                    r.position.y+=Math.sin(t+i)*0.008;
+                }
+            });
+        }
+
+        function uCa(){
+            if(md){
+                const s=0.005;
+                const e=new THREE.Euler(0,0,0,'YXZ');
+                e.setFromQuaternion(ca.quaternion);
+                e.rotateY(-mx*s);
+                e.rotateX(-my*s);
+                e.x=Math.max(-Math.PI/2,Math.min(Math.PI/2,e.x));
+                ca.quaternion.setFromEuler(e);
+            }
+
+            const tp=pl.m.position.clone();
+            tp.y+=15;
+            const cd=ca.position.clone().sub(tp).normalize();
+            const dp=tp.clone().addScaledVector(cd,50);
+
+            ca.position.lerp(dp,0.08);
+            ca.lookAt(tp.x,tp.y-5,tp.z);
+        }
+
+        function sUI(){
+            const ls=document.getElementById('ls');
+            lv.forEach((l,i)=>{
+                const b=document.createElement('button');
+                b.textContent=`L${i+1}`;
+                b.className='level-btn';
+                if(i===0)b.classList.add('active');
+                b.onclick=()=>lL(i);
+                ls.appendChild(b);
+            });
+        }
+
+        function uLB(){
+            document.querySelectorAll('.level-btn').forEach((b,i)=>{
+                b.classList.toggle('active',i===cli);
+            });
+        }
+
+        function sEL(){
+            addEventListener('keydown',e=>{ky[e.key]=!0});
+            addEventListener('keyup',e=>{ky[e.key]=!1});
+
+            addEventListener('mousedown',e=>{
+                if(e.button===0){
+                    md=!0;
+                    document.body.style.cursor='none';
+                }
+            });
+
+            addEventListener('mouseup',e=>{
+                if(e.button===0){
+                    md=!1;
+                    document.body.style.cursor='auto';
+                }
+            });
+
+            addEventListener('mousemove',e=>{
+                mx=e.movementX;
+                my=e.movementY;
+            });
+
+            addEventListener('resize',()=>{
+                ca.aspect=innerWidth/innerHeight;
+                ca.updateProjectionMatrix();
+                re.setSize(innerWidth,innerHeight);
+            });
+        }
+
+        function uFPS(){
+            fc++;
+            const ct=Date.now();
+            if(ct>=lt+1000){
+                fps=fc;
+                fc=0;
+                lt=ct;
+                document.getElementById('fps').textContent=fps;
+                document.getElementById('obj').textContent=sc.children.length;
+            }
+        }
+
+        function a(){
+            requestAnimationFrame(a);
+            uP();
+            uC();
+            uE();
+            uR();
+            uCa();
+            uFPS();
+            re.render(sc,ca);
+        }
+
+        addEventListener('load',i);
+    </script>
+</body>
+</html>
