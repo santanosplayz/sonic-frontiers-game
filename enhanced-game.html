@@ -17,13 +17,12 @@
             <div class="hud-item">❤️ H: <span id="hp">100</span>%</div>
             <div class="hud-item">⚡ S: <span id="sp">0</span></div>
         </div>
-        <div id="superMode">⭐ SUPER MODE! ⭐ (<span id="superTime">0</span>s)</div>
+        <div id="superMode">⭐ SUPER MODE! ⭐ (PERMANENT)</div>
         <div class="level-select" id="ls"></div>
         <div id="controls">
             <div>⬆️⬅️⬇️➡️ Move</div>
             <div>SPACE Jump / Double Jump (Super)</div>
-            <div>10 Rings = ⭐ Super Mode!</div>
-            <div>Uses 1 ring/second</div>
+            <div>10 Rings = ⭐ PERMANENT Super!</div>
         </div>
         <div id="bossWarning"></div>
     </div>
@@ -77,8 +76,11 @@
         ];
 
         let currentLevel = 0;
+        let globalRings = 0;
+        let globalSuperMode = false;
+
         let gameState = {
-            player: { x: 400, y: 300, vx: 0, vy: 0, jumping: false, doubleJumpUsed: false, health: 100, rings: 0, superMode: false, ringConsumptionTimer: 0 },
+            player: { x: 400, y: 300, vx: 0, vy: 0, jumping: false, doubleJumpUsed: false, health: 100 },
             platforms: [],
             enemies: [],
             rings: [],
@@ -92,7 +94,6 @@
         const jumpPower = 15;
         const superJumpPower = 12;
         const superModeGlide = 0.15;
-        const ringConsumptionRate = 60; // 1 ring per 60 frames (1 second at 60fps)
 
         // ========================================
         // GAME INITIALIZATION
@@ -122,7 +123,7 @@
             const level = levels[levelIndex];
             const levelColor = level.color;
 
-            gameState.player = { x: 400, y: 300, vx: 0, vy: 0, jumping: false, doubleJumpUsed: false, health: 100, rings: gameState.player.rings, superMode: false, ringConsumptionTimer: 0 };
+            gameState.player = { x: 400, y: 300, vx: 0, vy: 0, jumping: false, doubleJumpUsed: false, health: 100 };
             gameState.platforms = [];
             gameState.enemies = [];
             gameState.rings = [];
@@ -170,7 +171,7 @@
                     });
                 }
 
-                // Generate rings (more if not super mode yet)
+                // Generate rings
                 for (let i = 0; i < 25 + levelIndex * 5; i++) {
                     gameState.rings.push({
                         x: Math.random() * canvas.width,
@@ -208,16 +209,14 @@
 
         function updateUI() {
             document.getElementById('lv').textContent = currentLevel + 1;
-            document.getElementById('rc').textContent = gameState.player.rings;
+            document.getElementById('rc').textContent = globalRings;
             document.getElementById('hp').textContent = gameState.player.health;
             document.getElementById('sp').textContent = Math.floor(Math.sqrt(gameState.player.vx ** 2 + gameState.player.vy ** 2));
 
             // Show super mode indicator
             const superIndicator = document.getElementById('superMode');
-            if (gameState.player.superMode) {
+            if (globalSuperMode) {
                 superIndicator.style.display = 'block';
-                const timeRemaining = Math.ceil(gameState.player.rings);
-                document.getElementById('superTime').textContent = timeRemaining;
             } else {
                 superIndicator.style.display = 'none';
             }
@@ -238,7 +237,7 @@
             if (keys['ArrowRight'] || keys['d'] || keys['D']) gameState.player.vx = moveSpeed;
 
             // Apply gravity (reduced in super mode)
-            const currentGravity = gameState.player.superMode ? gravity * superModeGlide : gravity;
+            const currentGravity = globalSuperMode ? gravity * superModeGlide : gravity;
             gameState.player.vy += currentGravity;
             gameState.player.x += gameState.player.vx;
             gameState.player.y += gameState.player.vy;
@@ -268,7 +267,7 @@
             }
 
             // Double jump (Super Mode only)
-            if ((keys[' '] || keys['ArrowUp'] || keys['w'] || keys['W']) && gameState.player.jumping && gameState.player.superMode && !gameState.player.doubleJumpUsed) {
+            if ((keys[' '] || keys['ArrowUp'] || keys['w'] || keys['W']) && gameState.player.jumping && globalSuperMode && !gameState.player.doubleJumpUsed) {
                 gameState.player.vy = -superJumpPower;
                 gameState.player.doubleJumpUsed = true;
                 createParticles(gameState.player.x, gameState.player.y, '#ffd700', 10);
@@ -284,24 +283,9 @@
             }
 
             // Check if can go super
-            if (gameState.player.rings >= 10 && !gameState.player.superMode) {
-                gameState.player.superMode = true;
-                gameState.player.rings = 10; // Start with exactly 10 rings
-                gameState.player.ringConsumptionTimer = 0;
-            }
-
-            // Super Mode ring consumption (1 ring per second)
-            if (gameState.player.superMode) {
-                gameState.player.ringConsumptionTimer++;
-                if (gameState.player.ringConsumptionTimer >= ringConsumptionRate) {
-                    gameState.player.rings -= 1;
-                    gameState.player.ringConsumptionTimer = 0;
-                    
-                    if (gameState.player.rings <= 0) {
-                        gameState.player.superMode = false;
-                        gameState.player.rings = 0;
-                    }
-                }
+            if (globalRings >= 10 && !globalSuperMode) {
+                globalSuperMode = true;
+                createParticles(gameState.player.x, gameState.player.y, '#ffd700', 30);
             }
         }
 
@@ -342,7 +326,7 @@
                 const dist = Math.sqrt(dx * dx + dy * dy);
 
                 if (dist < 30) {
-                    if (gameState.player.superMode) {
+                    if (globalSuperMode) {
                         // Destroy enemy
                         enemy.health = 0;
                         createParticles(enemy.x, enemy.y, '#ff0000', 15);
@@ -396,7 +380,7 @@
             const dist = Math.sqrt(dx * dx + dy * dy);
 
             if (dist < 40) {
-                if (gameState.player.superMode) {
+                if (globalSuperMode) {
                     boss.health -= 2;
                     createParticles(boss.x, boss.y, '#ff6b6b', 10);
                     gameState.player.y -= 30;
@@ -412,7 +396,7 @@
             // Boss defeated
             if (boss.health <= 0) {
                 gameState.goal.reached = true;
-                gameState.player.rings += 50;
+                globalRings += 50;
                 createParticles(boss.x, boss.y, '#ffd700', 30);
             }
         }
@@ -426,7 +410,7 @@
 
                     if (dist < 25) {
                         ring.collected = true;
-                        gameState.player.rings += 1;
+                        globalRings += 1;
                         createParticles(ring.x, ring.y, '#ffd700', 5);
                     }
                 }
@@ -441,7 +425,6 @@
 
                 if (dist < 40) {
                     gameState.goal.reached = true;
-                    gameState.player.superMode = false;
                     setTimeout(() => {
                         loadLevel((currentLevel + 1) % levels.length);
                     }, 1000);
@@ -456,7 +439,7 @@
         function drawPlayer() {
             ctx.save();
 
-            if (gameState.player.superMode) {
+            if (globalSuperMode) {
                 // Draw golden aura
                 ctx.fillStyle = 'rgba(255, 215, 0, 0.3)';
                 ctx.beginPath();
@@ -477,7 +460,7 @@
             }
 
             // Draw player
-            ctx.fillStyle = gameState.player.superMode ? '#ffff00' : '#0099ff';
+            ctx.fillStyle = globalSuperMode ? '#ffff00' : '#0099ff';
             ctx.fillRect(gameState.player.x - 15, gameState.player.y - 15, 30, 30);
             ctx.strokeStyle = '#000';
             ctx.lineWidth = 2;
