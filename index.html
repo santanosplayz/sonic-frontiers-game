@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sonic Frontiers 3D Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        #canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 18px;
+            z-index: 100;
+            pointer-events: auto;
+        }
+
+        .hud-item {
+            margin: 10px 0;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 15px;
+            border-radius: 5px;
+            border-left: 3px solid #00d4ff;
+        }
+
+        .level-select {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 200;
+            pointer-events: auto;
+        }
+
+        .level-btn {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .level-btn:hover {
+            background: #0052a3;
+            transform: scale(1.05);
+        }
+
+        .level-btn.active {
+            background: #00d4ff;
+            color: #000;
+        }
+
+        .model-upload {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid #00d4ff;
+            z-index: 200;
+            pointer-events: auto;
+            max-width: 300px;
+        }
+
+        .model-upload h3 {
+            margin-bottom: 10px;
+            color: #00d4ff;
+        }
+
+        .upload-input {
+            display: block;
+            width: 100%;
+            margin: 10px 0;
+            padding: 10px;
+            background: #333;
+            color: #fff;
+            border: 1px solid #00d4ff;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .upload-btn {
+            background: #00d4ff;
+            color: #000;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            width: 100%;
+            margin-top: 10px;
+            transition: all 0.3s;
+        }
+
+        .upload-btn:hover {
+            background: #00f0ff;
+        }
+
+        .animation-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid #ff6600;
+            z-index: 200;
+            pointer-events: auto;
+            max-width: 250px;
+        }
+
+        .animation-panel h3 {
+            margin-bottom: 10px;
+            color: #ff6600;
+        }
+
+        .animation-btn {
+            background: #ff6600;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            margin: 5px 0;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.3s;
+        }
+
+        .animation-btn:hover {
+            background: #ff7700;
+        }
+
+        .animation-btn.active {
+            background: #ffaa00;
+        }
+
+        .controls-info {
+            position: absolute;
+            top: 20px;
+            left: 250px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 3px solid #00d4ff;
+            font-size: 14px;
+            z-index: 100;
+            pointer-events: auto;
+            max-width: 300px;
+        }
+
+        .controls-info h4 {
+            margin-bottom: 10px;
+            color: #00d4ff;
+        }
+
+        .controls-info p {
+            margin: 5px 0;
+            font-family: monospace;
+        }
+
+        .loading-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #1a1a1a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            flex-direction: column;
+        }
+
+        .loading-screen h2 {
+            margin-bottom: 20px;
+            color: #00d4ff;
+        }
+
+        .spinner {
+            border: 4px solid #333;
+            border-top: 4px solid #00d4ff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="canvas"></canvas>
+        <div id="ui">
+            <div class="hud">
+                <div class="hud-item">Level: <span id="currentLevel">1</span></div>
+                <div class="hud-item">Speed: <span id="playerSpeed">0</span> km/h</div>
+                <div class="hud-item">Rings: <span id="ringCount">0</span></div>
+                <div class="hud-item">Health: <span id="playerHealth">100</span>%</div>
+            </div>
+
+            <div class="controls-info">
+                <h4>⌨️ Controls</h4>
+                <p>W - Forward</p>
+                <p>A - Left</p>
+                <p>S - Backward</p>
+                <p>D - Right</p>
+                <p>SPACE - Jump</p>
+                <p>SHIFT - Dash</p>
+                <p>Mouse - Look Around</p>
+                <p>ESC - Unlock Mouse</p>
+            </div>
+
+            <div class="level-select" id="levelSelect"></div>
+
+            <div class="animation-panel">
+                <h3>🎬 Animations</h3>
+                <button class="animation-btn" onclick="playAnimation('idle')">Idle</button>
+                <button class="animation-btn" onclick="playAnimation('walk')">Walk</button>
+                <button class="animation-btn" onclick="playAnimation('run')">Run</button>
+                <button class="animation-btn" onclick="playAnimation('jump')">Jump</button>
+                <button class="animation-btn" onclick="playAnimation('attack')">Attack</button>
+                <button class="animation-btn" onclick="playAnimation('dash')">Dash</button>
+                <button class="animation-btn" onclick="playAnimation('fall')">Fall</button>
+            </div>
+
+            <div class="model-upload">
+                <h3>📦 Upload Model</h3>
+                <input type="file" id="modelFile" class="upload-input" accept=".glb,.gltf,.fbx" />
+                <input type="text" id="modelName" class="upload-input" placeholder="Model name (optional)" />
+                <button class="upload-btn" onclick="uploadModel()">Upload Model</button>
+                <div id="uploadStatus" style="margin-top: 10px; font-size: 12px; color: #00d4ff;"></div>
+            </div>
+        </div>
+        <div class="loading-screen" id="loadingScreen">
+            <h2>Loading Game...</h2>
+            <div class="spinner"></div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
