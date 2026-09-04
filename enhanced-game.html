@@ -17,12 +17,13 @@
             <div class="hud-item">❤️ H: <span id="hp">100</span>%</div>
             <div class="hud-item">⚡ S: <span id="sp">0</span></div>
         </div>
-        <div id="superMode">⭐ SUPER MODE! ⭐</div>
+        <div id="superMode">⭐ SUPER MODE! ⭐ (<span id="superTime">0</span>s)</div>
         <div class="level-select" id="ls"></div>
         <div id="controls">
             <div>⬆️⬅️⬇️➡️ Move</div>
             <div>SPACE Jump / Double Jump (Super)</div>
             <div>10 Rings = ⭐ Super Mode!</div>
+            <div>Uses 1 ring/second</div>
         </div>
         <div id="bossWarning"></div>
     </div>
@@ -77,7 +78,7 @@
 
         let currentLevel = 0;
         let gameState = {
-            player: { x: 400, y: 300, vx: 0, vy: 0, jumping: false, doubleJumpUsed: false, health: 100, rings: 0, superMode: false, superTimer: 0 },
+            player: { x: 400, y: 300, vx: 0, vy: 0, jumping: false, doubleJumpUsed: false, health: 100, rings: 0, superMode: false, ringConsumptionTimer: 0 },
             platforms: [],
             enemies: [],
             rings: [],
@@ -91,6 +92,7 @@
         const jumpPower = 15;
         const superJumpPower = 12;
         const superModeGlide = 0.15;
+        const ringConsumptionRate = 60; // 1 ring per 60 frames (1 second at 60fps)
 
         // ========================================
         // GAME INITIALIZATION
@@ -120,7 +122,7 @@
             const level = levels[levelIndex];
             const levelColor = level.color;
 
-            gameState.player = { x: 400, y: 300, vx: 0, vy: 0, jumping: false, doubleJumpUsed: false, health: 100, rings: gameState.player.rings, superMode: false, superTimer: 0 };
+            gameState.player = { x: 400, y: 300, vx: 0, vy: 0, jumping: false, doubleJumpUsed: false, health: 100, rings: gameState.player.rings, superMode: false, ringConsumptionTimer: 0 };
             gameState.platforms = [];
             gameState.enemies = [];
             gameState.rings = [];
@@ -214,12 +216,8 @@
             const superIndicator = document.getElementById('superMode');
             if (gameState.player.superMode) {
                 superIndicator.style.display = 'block';
-                gameState.player.superTimer--;
-                if (gameState.player.superTimer <= 0) {
-                    gameState.player.superMode = false;
-                    gameState.player.rings -= 10;
-                    superIndicator.style.display = 'none';
-                }
+                const timeRemaining = Math.ceil(gameState.player.rings);
+                document.getElementById('superTime').textContent = timeRemaining;
             } else {
                 superIndicator.style.display = 'none';
             }
@@ -288,7 +286,22 @@
             // Check if can go super
             if (gameState.player.rings >= 10 && !gameState.player.superMode) {
                 gameState.player.superMode = true;
-                gameState.player.superTimer = 600; // 10 seconds at 60fps
+                gameState.player.rings = 10; // Start with exactly 10 rings
+                gameState.player.ringConsumptionTimer = 0;
+            }
+
+            // Super Mode ring consumption (1 ring per second)
+            if (gameState.player.superMode) {
+                gameState.player.ringConsumptionTimer++;
+                if (gameState.player.ringConsumptionTimer >= ringConsumptionRate) {
+                    gameState.player.rings -= 1;
+                    gameState.player.ringConsumptionTimer = 0;
+                    
+                    if (gameState.player.rings <= 0) {
+                        gameState.player.superMode = false;
+                        gameState.player.rings = 0;
+                    }
+                }
             }
         }
 
